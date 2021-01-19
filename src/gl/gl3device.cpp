@@ -1732,6 +1732,7 @@ static struct {
 	int gl;
 	int major, minor;
 } profiles[] = {
+	{ GLFW_OPENGL_API, 4, 5 },
 	{ GLFW_OPENGL_API, 3, 3 },
 	{ GLFW_OPENGL_API, 2, 1 },
 	{ GLFW_OPENGL_ES_API, 3, 1 },

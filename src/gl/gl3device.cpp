@@ -25,43 +25,8 @@
 
 namespace rw {
 namespace gl3 {
-struct DisplayMode
-{
-#ifdef LIBRW_SDL2
-	SDL_DisplayMode mode;
-#else
-	GLFWvidmode mode;
-#endif
-	int32 depth;
-	uint32 flags;
-};
 
-struct GlGlobals
-{
-#ifdef LIBRW_SDL2
-	SDL_Window **pWindow;
-	SDL_Window *window;
-	SDL_GLContext glcontext;
-#else
-	GLFWwindow **pWindow;
-	GLFWwindow *window;
-
-	GLFWmonitor *monitor;
-	int numMonitors;
-	int currentMonitor;
-#endif
-
-	DisplayMode *modes;
-	int numModes;
-	int currentMode;
-	int presentWidth, presentHeight;
-	int presentOffX, presentOffY;
-
-	// for opening the window
-	int winWidth, winHeight;
-	const char *winTitle;
-	uint32 numSamples;
-} glGlobals;
+GlGlobals glGlobals;
 
 Gl3Caps gl3Caps;
 // terrible hack for GLES
@@ -562,7 +527,7 @@ static GLint addressConvMap[] = {
 };
 
 static void
-setFilterMode(uint32 stage, int32 filter)
+setFilterMode(uint32 stage, int32 filter, int32 maxAniso = 1)
 {
 	if(rwStateCache.texstage[stage].filter != (Texture::FilterMode)filter){
 		rwStateCache.texstage[stage].filter = (Texture::FilterMode)filter;
@@ -579,6 +544,11 @@ setFilterMode(uint32 stage, int32 filter)
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filterConvMap_NoMIP[filter]);
 				}
 				natras->filterMode = filter;
+			}
+			if(natras->maxAnisotropy != maxAniso){
+				setActiveTexture(stage);
+				glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, (float)maxAniso);
+				natras->maxAnisotropy = maxAniso;
 			}
 		}
 	}
@@ -710,7 +680,7 @@ setTexture(int32 stage, Texture *tex)
 		return;
 	}
 	setRasterStageOnly(stage, tex->raster);
-	setFilterMode(stage, tex->getFilter());
+	setFilterMode(stage, tex->getFilter(), tex->getMaxAnisotropy());
 	setAddressU(stage, tex->getAddressU());
 	setAddressV(stage, tex->getAddressV());
 }
@@ -1822,6 +1792,8 @@ initOpenGL(void)
 			gl3Caps.astcSupported = true;
 //		printf("%d %s\n", i, ext);
 	}
+
+	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl3Caps.maxAnisotropy);
 
 	if(gl3Caps.gles){
 		if(gl3Caps.glversion >= 30)

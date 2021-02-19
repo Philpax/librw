@@ -11,12 +11,7 @@
 #include "../rwpipeline.h"
 #include "../rwobjects.h"
 #ifdef RW_OPENGL
-#include <GL/glew.h>
-#ifdef LIBRW_SDL2
-#include <SDL.h>
-#else
-#include <GLFW/glfw3.h>
-#endif
+
 #include "rwgl3.h"
 #include "rwgl3shader.h"
 #include "rwgl3impl.h"
@@ -1244,7 +1239,7 @@ setFrameBuffer(Camera *cam)
 				Gl3Raster *oldfb = PLUGINOFFSET(Gl3Raster, natzb->fboMate, nativeRasterOffset);
 				if(oldfb->fbo){
 					bindFramebuffer(oldfb->fbo);
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 					bindFramebuffer(natfb->fbo);
 				}
 				oldfb->fboMate = nil;
@@ -1255,13 +1250,13 @@ setFrameBuffer(Camera *cam)
 				if(gl3Caps.gles)
 					glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, natzb->texid);
 				else
-					glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, natzb->texid, 0);
+					glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, natzb->texid, 0);
 			}
 		}
 	}else{
 		// remove z-buffer
 		if(natfb->fboMate && natfb->fbo)
-			glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
 		natfb->fboMate = nil;
 	}
 }
@@ -1349,7 +1344,7 @@ beginUpdate(Camera *cam)
 #ifdef LIBRW_SDL2
 		SDL_GetWindowSize(glGlobals.window, &w, &h);
 #else
-		glfwGetWindowSize(glGlobals.window, &w, &h);
+		glfwGetFramebufferSize(glGlobals.window, &w, &h);
 #endif
 	}else{
 		w = fb->width;
@@ -1541,7 +1536,6 @@ static struct {
 static int
 startSDL2(void)
 {
-	GLenum status;
 	SDL_Window *win;
 	SDL_GLContext ctx;
 	DisplayMode *mode;
@@ -1576,23 +1570,16 @@ startSDL2(void)
 		return 0;
 	}
 	ctx = SDL_GL_CreateContext(win);
+
+	if (!((gl3Caps.gles ? gladLoadGLES2Loader : gladLoadGLLoader) ((GLADloadproc) SDL_GL_GetProcAddress, gl3Caps.glversion)) ) {
+		RWERROR((ERR_GENERAL, "gladLoadGLLoader failed"));
+		SDL_GL_DeleteContext(ctx);
+		SDL_DestroyWindow(win);
+		return 0;
+	}
+
 	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
 
-	/* Init GLEW */
-	glewExperimental = GL_TRUE;
-	status = glewInit();
-	if(status != GLEW_OK){
-		RWERROR((ERR_GENERAL, glewGetErrorString(status)));
-		SDL_GL_DeleteContext(ctx);
-		SDL_DestroyWindow(win);
-		return 0;
-	}
-	if(!GLEW_VERSION_3_3){
-		RWERROR((ERR_GENERAL, "OpenGL 3.3 needed"));
-		SDL_GL_DeleteContext(ctx);
-		SDL_DestroyWindow(win);
-		return 0;
-	}
 	glGlobals.window = win;
 	glGlobals.glcontext = ctx;
 	*glGlobals.pWindow = win;
@@ -1713,7 +1700,6 @@ static struct {
 static int
 startGLFW(void)
 {
-	GLenum status;
 	GLFWwindow *win;
 	DisplayMode *mode;
 
@@ -1747,21 +1733,16 @@ startGLFW(void)
 		return 0;
 	}
 	glfwMakeContextCurrent(win);
+
+	/* Init GLAD */
+	if (!((gl3Caps.gles ? gladLoadGLES2Loader : gladLoadGLLoader) ((GLADloadproc) glfwGetProcAddress, gl3Caps.glversion)) ) {
+		RWERROR((ERR_GENERAL, "gladLoadGLLoader failed"));
+		glfwDestroyWindow(win);
+		return 0;
+	}
+
 	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
 
-	/* Init GLEW */
-	glewExperimental = GL_TRUE;
-	status = glewInit();
-	if(status != GLEW_OK){
-		RWERROR((ERR_GENERAL, glewGetErrorString(status)));
-		glfwDestroyWindow(win);
-		return 0;
-	}
-	if(!GLEW_VERSION_3_3){
-		RWERROR((ERR_GENERAL, "OpenGL 3.3 needed"));
-		glfwDestroyWindow(win);
-		return 0;
-	}
 	glGlobals.window = win;
 	*glGlobals.pWindow = win;
 	glGlobals.presentWidth = 0;
@@ -1782,6 +1763,9 @@ stopGLFW(void)
 static int
 initOpenGL(void)
 {
+/*
+	// this only works from 3.0 onward,
+	// but luckily GLAD has already taken care of extensions for us
 	int numExt;
 	glGetIntegerv(GL_NUM_EXTENSIONS, &numExt);
 	for(int i = 0; i < numExt; i++){
@@ -1794,6 +1778,9 @@ initOpenGL(void)
 			gl3Caps.astcSupported = true;
 //		printf("%d %s\n", i, ext);
 	}
+*/
+	gl3Caps.dxtSupported = GLAD_GL_EXT_texture_compression_s3tc;
+	gl3Caps.astcSupported = GLAD_GL_KHR_texture_compression_astc_ldr;
 
 	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl3Caps.maxAnisotropy);
 

@@ -1,5 +1,5 @@
 #ifdef RW_GL3
-#include <GL/glew.h>
+#include "glad/glad.h"
 #ifdef LIBRW_SDL2
 #include <SDL.h>
 #else
@@ -150,6 +150,8 @@ struct Im2DVertex
 
 void setAttribPointers(AttribDesc *attribDescs, int32 numAttribs);
 void disableAttribPointers(AttribDesc *attribDescs, int32 numAttribs);
+void setupVertexInput(InstanceDataHeader *header);
+void teardownVertexInput(InstanceDataHeader *header);
 
 // Render state
 
